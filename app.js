@@ -5,6 +5,8 @@ const { json } = require("express");
 const addBookRoute = require("@routes/addBookRoute");
 const customerRoutes = require("@routes/customerRoutes");
 const loanRoutes = require("@routes/loanRoutes");
+const dataRoutes = require("@routes/dataRoutes");
+
 const cors = require("cors");
 const app = express();
 
@@ -19,6 +21,7 @@ app.use('/customers', customerRoutes);
 
 // Loan routes
 app.use('/customers', loanRoutes);
+app.use('/data', dataRoutes);
 
 app.listen(port, () =>
   console.log(`Server is up and running on PORT: ${port}`)

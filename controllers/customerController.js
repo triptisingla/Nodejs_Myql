@@ -1,12 +1,24 @@
 // controllers/customerController.js
 
-const {Customer,Loan}=require("@models")
+const { Customer, Loan } = require("@models")
 
 // Create a new customer
 exports.createCustomer = async (req, res) => {
   try {
-    const { name, email } = req.body;
-    const customer = await Customer.create({ name, email });
+    const { first_name,
+      last_name,
+      phone_number,
+      monthly_salary,
+      age } = req.body;
+    const approved_limit = 36 * monthly_salary
+    const customer = await Customer.create({
+      first_name,
+      last_name,
+      phone_number,
+      monthly_salary,
+      approved_limit,
+      age
+    });
     res.status(201).json(customer);
   } catch (error) {
     res.status(500).json({ error: 'Failed to create customer' });
@@ -39,10 +51,27 @@ exports.getCustomerById = async (req, res) => {
 // Update a customer by ID
 exports.updateCustomer = async (req, res) => {
   try {
-    const { name, email } = req.body;
+    const {
+      first_name,
+      last_name,
+      phone_number,
+      monthly_salary,
+      age
+    } = req.body;
+    let approved_limit;
+    if (monthly_salary)
+      approved_limit = 36 * monthly_salary
+
     const updatedCustomer = await Customer.update(
-      { name, email },
-      { where: { id: req.params.customerId } }
+      {
+        first_name,
+        last_name,
+        phone_number,
+        monthly_salary,
+        age,
+        approved_limit
+      },
+      { where: { customer_id: req.params.customerId } }
     );
     if (updatedCustomer[0] === 0) {
       return res.status(404).json({ error: 'Customer not found' });
@@ -57,7 +86,7 @@ exports.updateCustomer = async (req, res) => {
 exports.deleteCustomer = async (req, res) => {
   try {
     const deletedCustomerCount = await Customer.destroy({
-      where: { id: req.params.customerId }
+      where: { customer_id: req.params.customerId }
     });
     if (deletedCustomerCount === 0) {
       return res.status(404).json({ error: 'Customer not found' });
@@ -69,21 +98,21 @@ exports.deleteCustomer = async (req, res) => {
 };
 
 exports.getAllLoansForCustomer = async (req, res) => {
-    try {
-      // Find the customer by ID
-      const customer = await Customer.findByPk(req.params.customerId, {
-        include: Loan // Include the associated loans
-      });
-      
-      if (!customer) {
-        return res.status(404).json({ error: 'Customer not found' });
-      }
-  
-      // Access the associated loans from the customer object
-      const loans = customer.Loans;
-      
-      res.json(customer);
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch loans' });
+  try {
+    // Find the customer by ID
+    const customer = await Customer.findByPk(req.params.customerId, {
+      include: Loan // Include the associated loans
+    });
+
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found' });
     }
-  };
+
+    // Access the associated loans from the customer object
+    // const loans = customer.Loans;
+
+    res.json(customer);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch loans' });
+  }
+};
