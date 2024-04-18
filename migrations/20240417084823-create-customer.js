@@ -26,15 +26,15 @@ module.exports = {
         type: Sequelize.INTEGER
       },
       monthly_salary: {
-        type: Sequelize.INTEGER, // or DataTypes.INTEGER
+        type: Sequelize.INTEGER,
         allowNull: false
       },
       approved_limit: {
-        type: Sequelize.INTEGER, // or DataTypes.INTEGER
+        type: Sequelize.INTEGER,
         allowNull: false
       },
       current_debt: {
-        type: Sequelize.INTEGER, // or DataTypes.INTEGER
+        type: Sequelize.INTEGER,
         allowNull: true
       },
       createdAt: {

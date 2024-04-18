@@ -24,7 +24,6 @@ module.exports = (sequelize, DataTypes) => {
     remaining_principal: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      // defaultValue: DataTypes.col('loan_amount'), // Initialize with loan_amount
     },
     tenure: DataTypes.INTEGER,
     interest_rate: DataTypes.FLOAT,
@@ -32,16 +31,13 @@ module.exports = (sequelize, DataTypes) => {
     emis_paid_on_time: DataTypes.INTEGER,
     start_date: DataTypes.DATE,
     end_date: DataTypes.DATE,
-    // loan_amount: DataTypes.FLOAT,
-    // status: DataTypes.STRING
   }, {
     sequelize,
     modelName: 'Loan',
   });
   Loan.addHook('beforeCreate', (loan, options) => {
-    // If loan_id is provided, use it, otherwise let Sequelize auto-generate it
     if (!loan.loan_id) {
-      delete loan.loan_id; // Ensure that customer_id is not provided to let Sequelize auto-generate it
+      delete loan.loan_id;
     }
   });
   return Loan;

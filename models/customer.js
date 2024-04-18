@@ -29,16 +29,9 @@ module.exports = (sequelize, DataTypes) => {
     monthly_salary: DataTypes.INTEGER,
     approved_limit: DataTypes.INTEGER,
     current_debt: DataTypes.INTEGER,
-    // email: DataTypes.STRING
   }, {
     sequelize,
     modelName: 'Customer',
   });
-  // Customer.addHook('beforeCreate', (customer, options) => {
-  //   // If customer_id is provided, use it, otherwise let Sequelize auto-generate it
-  //   if (!customer.customer_id) {
-  //     delete customer.customer_id; // Ensure that customer_id is not provided to let Sequelize auto-generate it
-  //   }
-  // });
   return Customer;
 };

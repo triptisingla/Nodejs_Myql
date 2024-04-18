@@ -30,8 +30,6 @@ exports.ingestData = async (req, res) => {
         const customersData = await fileUtils.readExcelData('customer_data.xlsx');
         const loansData = await fileUtils.readExcelData('loan_data.xlsx');
 
-
-        console.log("here after reading", customersData);
         // Map the customer data to match the Sequelize model attributes
         const mappedCustomersData = customersData.map(row => {
             const mappedRow = {};
@@ -51,8 +49,6 @@ exports.ingestData = async (req, res) => {
             }
             return acc;
         }, []);
-
-        // console.log("Loan data : ", loansData);
 
         // Map the loan data to match the Sequelize model attributes
         const mappedLoansData = loansData.map(row => {
@@ -79,7 +75,6 @@ exports.ingestData = async (req, res) => {
             return acc;
         }, []);
         // Create customers and loans records in the database
-        console.log("cutsomerDATA AFTER UNIQUENESS", uniqueCustomersData)
         await Customer.bulkCreate(uniqueCustomersData, {
             fields: ['customer_id', 'first_name', 'last_name', 'phone_number', 'monthly_salary', 'approved_limit', 'current_debt','age']
         });

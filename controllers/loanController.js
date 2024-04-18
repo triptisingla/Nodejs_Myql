@@ -12,34 +12,26 @@ exports.createLoan = async (req, res) => {
       loan_amount,
       tenure,
       interest_rate, } = req.body;
+    const customer = await Customer.findByPk(customer_id);
 
-    // const { customer_id, loan_amount, interest_rate, tenure } = req.body;
+    if (!customer) {
+      return res.status(404).json({ message: "Customer not found" });
+    }
+
     let approval = true;
     const loans = await Loan.findAll({
       where: { customer_id },
       include: Customer
     });
-    const customer=await Customer.findByPk(customer_id);
 
-    console.log(loans.length);
     let monthly_repayment = 0;
     if (loans.length == 0) {
-      if(loan_amount > customer.monthly_salary * 0.5)
-      return res.status(201).json({ customer_id, loan_approved: false, message: "Your loan was not approved" }); 
+      if (loan_amount > customer.monthly_salary * 0.5)
+        return res.status(201).json({ customer_id, loan_approved: false, message: "Your loan was not approved" });
       monthly_repayment = calculateMonthlyPayment(loan_amount, interest_rate, tenure);
-      const loan = await Loan.create({
-        loan_amount,
-        tenure,
-        interest_rate,
-        monthly_repayment,
-        start_date: new Date(),
-        customer_id,
-        remaining_principal:loan_amount
-      });
-      return res.status(201).json({ loan_id: loan.loan_id, customer_id, loan_approved: true, monthly_installment: loan.monthly_repayment })
+      return createAndRespond(customer_id, loan_amount, tenure, interest_rate, res, monthly_repayment);
     }
 
-    // const customer = loans[0].Customer;
     const score = calculateCreditScore(loans, customer);
     const totalEMIs = calculateTotalEMIs(loans);
     if (totalEMIs > customer.monthly_salary * 0.5) {
@@ -55,18 +47,8 @@ exports.createLoan = async (req, res) => {
       approval = response.approval;
       monthly_repayment = response.monthly_installment
     }
-    // console.log(req.params.customerId, amount, status);
     if (approval) {
-      const loan = await Loan.create({
-        loan_amount,
-        tenure,
-        interest_rate,
-        monthly_repayment,
-        start_date: new Date(),
-        customer_id,
-        remaining_principal:loan_amount
-      });
-      return res.status(201).json({ loan_id: loan.loan_id, customer_id, loan_approved: true, monthly_installment: loan.monthly_repayment });
+      return createAndRespond(customer_id, loan_amount, tenure, interest_rate, res, monthly_repayment);
     }
     else {
       return res.status(201).json({ customer_id, loan_approved: false, message: "Your loan was not approved" });
@@ -76,9 +58,33 @@ exports.createLoan = async (req, res) => {
   }
 };
 
+async function createAndRespond(customer_id, loan_amount, tenure, interest_rate, res, monthly_repayment) {
+  const loan = await Loan.create({
+    loan_amount,
+    tenure,
+    interest_rate,
+    monthly_repayment,
+    start_date: new Date(),
+    customer_id,
+    remaining_principal: loan_amount
+  });
+
+  const totalRepayment = monthly_repayment * tenure;
+  // Update customer's current debt
+  const customer = await Customer.findByPk(customer_id);
+  customer.current_debt = (customer.current_debt || 0) + totalRepayment;
+  await customer.save();
+
+  return res.status(201).json({ loan_id: loan.loan_id, customer_id, loan_approved: true, monthly_installment: monthly_repayment });
+}
 // Get all loans for a customer
 exports.getAllLoansForCustomer = async (req, res) => {
   try {
+    const customer = await Customer.findByPk(req.params.customer_id);
+
+    if (!customer) {
+      return res.status(404).json({ message: "Customer not found" });
+    }
     const loans = await Loan.findAll({
       where: { customer_id: req.params.customer_id },
       include: Customer,
@@ -92,9 +98,7 @@ exports.getAllLoansForCustomer = async (req, res) => {
 // Get a single loan by ID
 exports.getLoanById = async (req, res) => {
   try {
-    // console.log("id : ", req.params.loanId)
     const loan = await Loan.findByPk(req.params.loanId, { include: Customer });
-    // console.log(loan);
     if (!loan) {
       return res.status(404).json({ error: "Loan not found" });
     }
@@ -104,68 +108,63 @@ exports.getLoanById = async (req, res) => {
   }
 };
 
-// Update a loan by ID
-// exports.updateLoan = async (req, res) => {
-//   try {
-//     const { loan_amount,
-//       tenure,
-//       interest_rate,
-//       monthly_repayment,
-//       emis_paid_on_time,
-//       start_date,
-//       end_date,
-//       customer_id } = req.body;
-//     const updatedLoan = await Loan.update(
-//       {
-//         loan_amount,
-//         tenure,
-//         interest_rate,
-//         monthly_repayment,
-//         emis_paid_on_time,
-//         start_date,
-//         end_date,
-//         customer_id
-//       },
-//       { where: { loan_id: req.params.loanId }, include: Customer },
-//     );
-//     if (updatedLoan[0] === 0) {
-//       return res.status(404).json({ error: "Loan not found" });
-//     }
-//     res.status(200).json({ data: updatedLoan, message: "Loan updated successfully" });
-//   } catch (error) {
-//     res.status(500).json({ error: "Failed to update loan" });
-//   }
-// };
 
-exports.updateLoan = async (req, res) => {
+exports.makePayment = async (req, res) => {
   try {
     const { emi_payment } = req.body;
-    const loan = await Loan.findByPk(req.params.loanId,{include:Customer});
-
+    if (!emi_payment) {
+      return res.status(400).json({ error: "Pay the correct amount!" })
+    }
+    const loan = await Loan.findByPk(req.params.loanId, { include: Customer });
+    if (loan.remaining_principal == 0) {
+      return res.status(201).json({ message: "Already repaid the whole amount of the loan!" })
+    }
+    if (loan.emis_paid_on_time == loan.tenure)
+      return res.status(202).json({ message: "Your tenure ended, you are late!" })
+    let return_money = 0;
     if (!loan) {
       return res.status(404).json({ error: "Loan not found" });
     }
 
-    // Calculate the new remaining principal after the partial payment
-    const remainingPrincipal = loan.remaining_principal - emi_payment;
 
-    // Calculate the remaining tenure based on the original tenure and the number of EMIs paid
+    if (loan.remaining_principal < emi_payment) {
+      return_money = emi_payment - loan.remaining_principal;
+    }
+    // let remainingPrincipal = max(0, (loan.remaining_principal - emi_payment));
+    let remainingPrincipal = loan.remaining_principal - emi_payment;
+    if (remainingPrincipal < 0)
+      remainingPrincipal = 0;
+
+    let end_date = "0000-00-00 00:00:00";
+    if (remainingPrincipal == 0)
+      end_date = new Date();
     const remainingTenure = loan.tenure - loan.emis_paid_on_time;
-
-    // Recalculate the new EMI based on the updated remaining principal and remaining tenure
     const newEMI = calculateMonthlyPayment(remainingPrincipal, loan.interest_rate, remainingTenure);
 
-    // Update the loan with the new remaining principal, EMI, and increment the number of EMIs paid
     const updatedLoan = await Loan.update(
-      { 
+      {
         remaining_principal: remainingPrincipal,
         monthly_repayment: newEMI,
-        emis_paid_on_time: loan.emis_paid_on_time + 1
+        emis_paid_on_time: loan.emis_paid_on_time + 1,
+        end_date
       },
       { where: { loan_id: req.params.loanId } }
     );
+    // Check if the update was successful
+    if (updatedLoan[0] === 0) { // Sequelize update returns an array where the first element is the number of affected rows
+      return res.status(404).json({ error: "Failed to update the loan" });
+    }
 
-    return res.status(200).json({ message: "EMI payment updated successfully", new_emi: newEMI });
+    const customer = await Customer.findByPk(loan.customer_id);
+    if (customer) {
+      customer.current_debt -= emi_payment;
+      if (customer.current_debt < 0)
+        customer.current_debt = 0;
+      await customer.save();
+    } else {
+      return res.status(404).json({ error: "Customer not found" });
+    }
+    return res.status(200).json({ message: "EMI payment updated successfully", new_emi: newEMI, "Money Returned": return_money });
   } catch (error) {
     res.status(500).json({ error: "Failed to update EMI payment" });
   }
@@ -186,99 +185,11 @@ exports.deleteLoan = async (req, res) => {
   }
 };
 
-// function calculateMonthlyPayment(principal, annualInterestRate, tenureYears) {
-//   const monthlyInterestRate = annualInterestRate / 100 / 12; // Convert annual rate to a monthly and percentage to a decimal
-//   const totalPayments = tenureYears * 12; // Total number of monthly payments
-
-//   const monthlyPayment = principal * monthlyInterestRate * (Math.pow(1 + monthlyInterestRate, totalPayments)) / (Math.pow(1 + monthlyInterestRate, totalPayments) - 1);
-
-//   return monthlyPayment.toFixed(2); // Rounds to two decimal places
-// }
-
-// exports.check_eligibility = async (req, res) => {
-//   try {
-//     const { customer_id,
-//       loan_amount,
-//       interest_rate,
-//       tenure } = req.body;
-//     // console.log("here");
-//     // console.log("customer id is: ", customer_id)
-
-
-
-//     const loans = await Loan.findAll({ where: { customer_id }, include: Customer });
-//     if (loans.length == 0) {
-//       const monthly_installment = calculateMonthlyPayment(loan_amount, interest_rate, tenure);
-//       return res.status(200).json({ customer_id, approval: true, interest_rate, corrected_interest_rate: interest_rate, tenure, monthly_installment });
-//     }
-//     const customer = loans[0].Customer;
-
-
-
-//     const currentYear = new Date().getFullYear();
-//     let score = 100;
-
-//     // Component 1: Timely EMIs
-//     const timelyPaymentsRatio = loans.reduce((acc, loan) => acc + (loan.emis_paid_on_time / loan.tenure), 0) / loans.length;
-//     score += timelyPaymentsRatio * 10;
-
-//     // Component 2: Number of loans
-//     const totalLoans = loans.length;
-//     score -= (totalLoans > 5 ? 10 : 0); // Subtract points if customer seems to rely too heavily on credit
-
-//     // Component 3: Loan activity in the current year
-//     const currentYearLoans = loans.filter(loan => new Date(loan.start_date).getFullYear() === currentYear).length;
-//     score += (currentYearLoans > 3 ? -10 : 5); // Penalize for too many new loans, reward for moderate activity
-
-//     // Component 4: Loan approved volume
-//     const totalApprovedAmount = loans.reduce((acc, loan) => acc + loan.loan_amount, 0);
-//     if (totalApprovedAmount > customer.approved_limit) {
-//       score = 0; // If approved volume exceeds the limit, set score to 0
-//     } else {
-//       score += (totalApprovedAmount > 500000 ? 15 : 5); // Increase score more for higher approved amounts within limits
-//     }
-
-//     // Normalize score to be out of 100 and not fractional
-//     score = Math.min(Math.max(Math.round(score), 0), 100);
-
-//     const totalEMIs = loans.reduce((acc, loan) => acc + (loan.monthly_repayment), 0);
-//     if (totalEMIs > customer.monthly_salary * 0.5) {
-//       return res.status(200).json({ customer_id, approval: false, interest_rate, corrected_interest_rate: 0, tenure: 0, monthly_installment: 0 });
-//     }
-//     else if (score > 50) {
-//       const monthly_installment = calculateMonthlyPayment(loan_amount, interest_rate, tenure);
-//       return res.status(200).json({ customer_id, approval: true, interest_rate, corrected_interest_rate: interest_rate, tenure, monthly_installment });
-//     } else if (score > 30) {
-//       if (interest_rate > 12) {
-//         const monthly_installment = calculateMonthlyPayment(loan_amount, interest_rate, tenure);
-//         return res.status(200).json({ customer_id, approval: true, interest_rate, corrected_interest_rate: interest_rate, tenure, monthly_installment });
-//       }
-//       else {
-//         const monthly_installment = calculateMonthlyPayment(loan_amount, 12, tenure);
-//         return res.status(200).json({ customer_id, approval: false, interest_rate, corrected_interest_rate: 12, tenure, monthly_installment });
-//       }
-
-//     } else if (score > 10) {
-//       if (interest_rate > 16) {
-//         const monthly_installment = calculateMonthlyPayment(loan_amount, interest_rate, tenure);
-//         return res.status(200).json({ customer_id, approval: true, interest_rate, corrected_interest_rate: interest_rate, tenure, monthly_installment });
-//       }
-//       else {
-//         const monthly_installment = calculateMonthlyPayment(loan_amount, 16, tenure);
-//         return res.status(200).json({ customer_id, approval: false, interest_rate, corrected_interest_rate: 16, tenure, monthly_installment });
-//       }
-//     } else {
-//       return res.status(200).json({ customer_id, approval: false, interest_rate, corrected_interest_rate: 0, tenure: 0, monthly_installment: 0 });
-
-//     }
-
-//   } catch (error) {
-//     res.status(500).json({ error: "Failed to get loan" });
-//   }
-// }
 
 // Calculate monthly payment
 function calculateMonthlyPayment(principal, rate, tenure) {
+  if (principal == 0)
+    return 0.00;
   const monthlyRate = rate / 1200;
   const payment = principal * monthlyRate / (1 - (Math.pow(1 / (1 + monthlyRate), tenure)));
   return parseFloat(payment.toFixed(2));
@@ -318,6 +229,9 @@ exports.check_eligibility = async (req, res) => {
   try {
     const { customer_id, loan_amount, interest_rate, tenure } = req.body;
 
+    if (!customer_id) {
+      return res.status(400).json({ error: "Customer ID is required" });
+    }
     const loans = await Loan.findAll({
       where: { customer_id },
       include: Customer
@@ -372,19 +286,14 @@ function calculateRemainingEMIs(remainingPrincipal, monthlyRepayment, interestRa
   const monthlyRate = interestRate / 1200;
 
   while (remainingPrincipal > 0) {
-    // Calculate monthly interest
     const monthlyInterest = remainingPrincipal * monthlyRate;
 
-    // Deduct monthly interest from monthly repayment to get principal repayment
     const principalRepayment = monthlyRepayment - monthlyInterest;
 
-    // Deduct principal repayment from remaining principal
     remainingPrincipal -= principalRepayment;
 
-    // Increment the count of EMIs
     emiCount++;
 
-    // Break the loop if remaining principal becomes negative (loan paid off before term)
     if (remainingPrincipal <= 0) {
       break;
     }
@@ -394,21 +303,21 @@ function calculateRemainingEMIs(remainingPrincipal, monthlyRepayment, interestRa
 }
 
 
-exports.viewStatement=async(req,res)=>{
-  const {customer_id,loan_id}=req.params;
+exports.viewStatement = async (req, res) => {
+  const { customer_id, loan_id } = req.params;
 
-  const loan=await Loan.findByPk(loan_id,{include:Customer});
+  const loan = await Loan.findByPk(loan_id, { include: Customer });
 
   if (!loan) {
     return res.status(404).json({ error: "Loan not found" });
   }
 
-  if(loan.customer_id!=customer_id)
-  return res.status(500).json({message:"You have not taken this loan so, you are not allowed to view this!!"})
-  
-  const amount_paid=loan.remaining_principal;
-  const repayments_left=calculateRemainingEMIs(loan.remaining_principal,loan.monthly_repayment,loan.interest_rate)
-  
-  
-  return res.status(200).json({principal:loan.loan_amount,interest_rate:loan.interest_rate,amount_paid,monthly_installment:loan.monthly_repayment,repayments_left})
+  if (loan.customer_id != customer_id)
+    return res.status(500).json({ message: "You have not taken this loan so, you are not allowed to view this!!" })
+
+  const amount_paid = loan.remaining_principal;
+  const repayments_left = calculateRemainingEMIs(loan.remaining_principal, loan.monthly_repayment, loan.interest_rate)
+
+
+  return res.status(200).json({ principal: loan.loan_amount, interest_rate: loan.interest_rate, amount_paid, monthly_installment: loan.monthly_repayment, repayments_left })
 }

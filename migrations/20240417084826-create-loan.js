@@ -45,13 +45,10 @@ module.exports = {
       },
       customer_id: {
         type: Sequelize.INTEGER,
-        // allowNull: false,
         references: {
           model: "Customers",
           key: "customer_id",
         },
-        // onUpdate: "CASCADE",
-        // onDelete: "CASCADE",
       },
       createdAt: {
         allowNull: false,

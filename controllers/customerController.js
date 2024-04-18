@@ -17,6 +17,7 @@ exports.createCustomer = async (req, res) => {
       phone_number,
       monthly_salary,
       approved_limit,
+      current_debt:0,
       age
     });
     res.status(201).json(customer);
