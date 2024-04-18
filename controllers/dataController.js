@@ -60,6 +60,9 @@ exports.ingestData = async (req, res) => {
             for (const [excelColumn, attribute] of Object.entries(loanColumnMapping)) {
                 mappedRow[attribute] = row[excelColumn];
             }
+            if (!mappedRow.hasOwnProperty('remaining_principal')) {
+                mappedRow['remaining_principal'] = mappedRow['loan_amount'];
+            }
             return mappedRow;
         });
 
@@ -94,7 +97,7 @@ exports.ingestData = async (req, res) => {
 
 
         await Loan.bulkCreate(validatedLoansData, {
-            fields: ['loan_id', 'loan_amount', 'tenure', 'interest_rate', 'monthly_repayment', 'emis_paid_on_time', 'start_date', 'end_date', 'customer_id']
+            fields: ['loan_id', 'loan_amount', 'tenure', 'interest_rate', 'monthly_repayment', 'emis_paid_on_time', 'start_date', 'end_date', 'customer_id','remaining_principal']
         });
 
         res.status(200).json({ message: 'Data ingestion completed successfully.' });

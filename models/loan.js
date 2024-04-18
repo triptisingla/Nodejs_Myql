@@ -21,9 +21,14 @@ module.exports = (sequelize, DataTypes) => {
       autoIncrement: true
     },
     loan_amount: DataTypes.INTEGER,
+    remaining_principal: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      // defaultValue: DataTypes.col('loan_amount'), // Initialize with loan_amount
+    },
     tenure: DataTypes.INTEGER,
     interest_rate: DataTypes.FLOAT,
-    monthly_repayment: DataTypes.INTEGER,
+    monthly_repayment: DataTypes.FLOAT,
     emis_paid_on_time: DataTypes.INTEGER,
     start_date: DataTypes.DATE,
     end_date: DataTypes.DATE,

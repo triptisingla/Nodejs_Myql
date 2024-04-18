@@ -15,6 +15,10 @@ module.exports = {
         allowNull: false,
         type: Sequelize.INTEGER,
       },
+      remaining_principal: {
+        allowNull: false,
+        type: Sequelize.INTEGER,
+      },
       tenure: {
         allowNull: false,
         type: Sequelize.INTEGER,
@@ -25,7 +29,7 @@ module.exports = {
       },
       monthly_repayment: {
         allowNull: false,
-        type: Sequelize.INTEGER,
+        type: Sequelize.FLOAT,
       },
       emis_paid_on_time: {
         allowNull: false,
